@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import argparse
 import binascii
-import common_libs.utilities as ut
+import utilities as ut
 import copy
 import data.data_cost as dt
 import itertools
@@ -63,13 +63,13 @@ def read_basic_block(fname, data, verbose):
     block_binary = code[start_pos+len(START_MARKER):end_pos]
     return datum_of_code(data, binascii.b2a_hex(block_binary), verbose)
 
-def predict(model, data, fname, verbose):
+def predict(model, data, fname, verbose, save_embed=False):
     datum = read_basic_block(fname, data, verbose)
     if verbose:
         print('='*40)
         print('\n'.join(i.intel for i in datum.block.instrs))
         print('='*40)
-    print(model(datum).item())
+    print(model(datum, save_embed).item())
     model.remove_refs(datum)
 
 def predict_raw(model_arg, data_arg, verbose, parallel):
@@ -128,6 +128,7 @@ def main():
     parser.add_argument('--model-data', help='Model data to use', required=True)
     parser.add_argument('--verbose', help='Whether to be verbose', action='store_true', default=False)
     parser.add_argument('--parallel', help='How many parallel threads to run', type=int, default=1)
+    parser.add_argument('--save-embed', help='Whether to save embed', action='store_true', default=False)
 
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument('--raw-stdin', help='Whether to read newline-separated raw hex from stdin', action='store_true', default=False)
@@ -146,7 +147,9 @@ def main():
     else:
         (model, data) = load_model_and_data(args.model, args.model_data)
         for fname in args.files:
-            predict(model, data, fname, args.verbose)
+            predict(
+                model, data, fname, args.verbose,
+                fname if args.save_embed else None)
 
 if __name__ == '__main__':
     main()

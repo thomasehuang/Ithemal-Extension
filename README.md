@@ -1,4 +1,46 @@
 
+# Ithemal Extension
+
+## Installation Instructions
+
+Clone the repository:
+```
+git clone https://github.com/thomasehuang/Ithemal-Extension.git
+cd Ithemal-Extension
+```
+
+Install all the necessary packages:
+```
+pip install -r requirements.txt
+```
+
+Install DynamoRIO for the tokenizer:
+```
+curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz -C /path/to/dynamorio
+```
+
+Build data tools (requires DynamoRIO):
+```
+cd Ithemal-Extension
+mkdir build; cd build
+cmake -DDynamoRIO_DIR=/path/to/dynamorio/cmake/folder ..
+make
+```
+
+## Save Basic Block Embeddings
+
+To save the final embedding of a basic block, use the `--save-embed` flag when running the `predict.py` script. This will automatically save the embedding to the same directory as the input binary. To execute on a batch of examples, you can simply input multiple files to the `--files` argument:
+```
+python learning/pytorch/predict.py --verbose --save-embed \
+    --model ithemal-models/hsw.dump \
+    --model-data ithemal-models/hsw.mdl \
+    --file  learning/pytorch/examples/example1.out \
+            learning/pytorch/examples/example2.out \
+            learning/pytorch/examples/example3.out
+```
+
+---
+
 # Overview
 
 Ithemal is a data driven model for predicting throughput of a basic block of x86-64 instructions.

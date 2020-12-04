@@ -406,7 +406,7 @@ class RNN(AbstractGraphModule):
         else:
             return self.rnn_init_hidden()
 
-    def pred_of_instr_chain(self, instr_chain):
+    def pred_of_instr_chain(self, instr_chain, save_embed):
         # type: (torch.tensor) -> torch.tensor
         _, final_state_packed = self.instr_rnn(instr_chain, self.get_instr_init())
         if self.params.rnn_type == RnnType.LSTM:
@@ -414,10 +414,17 @@ class RNN(AbstractGraphModule):
         else:
             final_state = final_state_packed
 
+        if save_embed is not None:
+            embed = final_state.squeeze()
+            save_path = os.path.join(
+                os.path.dirname(save_embed),
+                os.path.basename('.'.join(save_embed.split('.')[:-1]) + '.embed'))
+            torch.save(embed, save_path)
+
         return self.linear(final_state.squeeze()).squeeze()
 
 
-    def forward(self, item):
+    def forward(self, item, save_embed=None):
         # type: (dt.DataItem) -> torch.tensor
 
         token_state = self.get_token_init()
@@ -471,7 +478,7 @@ class RNN(AbstractGraphModule):
             ])
             return torch.max(preds)
 
-        return self.pred_of_instr_chain(instr_chain)
+        return self.pred_of_instr_chain(instr_chain, save_embed)
 
 class Fasthemal(AbstractGraphModule):
     def __init__(self, embedding_size, hidden_size, num_classes):
