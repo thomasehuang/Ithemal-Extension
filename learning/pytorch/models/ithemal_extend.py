@@ -2,20 +2,10 @@ import sys
 import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
-from enum import Enum, unique
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import common_libs.utilities as ut
-import data.data_cost as dt
-import torch.autograd as autograd
-import torch.optim as optim
-import math
-import numpy as np
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union, Tuple
-from . import model_utils
 
-from graph_models import *
+from graph_models import AbstractGraphModule
 
 
 class RNNExtend(AbstractGraphModule):
@@ -27,7 +17,7 @@ class RNNExtend(AbstractGraphModule):
         self.params = params
 
         # assuming LSTM for now
-        self.bb_rnn = nn.LSTM(self.hidden_size, self.hidden_size)
+        self.bb_rnn = nn.LSTM(self.embedding_size, self.hidden_size)
 
         self._bb_init = self.rnn_init_hidden()
 

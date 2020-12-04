@@ -1,5 +1,6 @@
+import torch
+from models.graph_models import RnnParameters
 from models.ithemal_extend import RNNExtend
-from models.graph_models import *
 
 if __name__ == '__main__':
     rnn_params = RnnParameters(
