@@ -3,12 +3,14 @@ import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
 import argparse
+import random
 import torch
 
 import models.graph_models as md
 import models.train as tr
 import training
 from data.data_extend import DataExtend
+from experiments.experiment import Experiment
 from ithemal_utils import *
 from models.ithemal_extend import RNNExtend
 
@@ -145,6 +147,18 @@ def main():
         model = load_model(base_params)
 
         trainer = training.load_trainer(base_params, train_params, model, data)
+        expt = Experiment(
+            train_params.experiment_name, train_params.experiment_time,
+            base_params.data)
+        loss_reporter = training.LossReporter(expt, len(data.train), trainer)
+        def report_loss_fn(msg):
+            loss_reporter.report_items(msg.n_items, msg.loss)
+
+        for epoch_no in range(train_params.epochs):
+            loss_reporter.start_epoch(epoch_no + 1, 0)
+            random.shuffle(data.train)
+            trainer.train(report_loss_fn=report_loss_fn)
+            loss_reporter.report()
     else:
         raise ValueError('Unknown mode "{}"'.format(args.subparser))
 

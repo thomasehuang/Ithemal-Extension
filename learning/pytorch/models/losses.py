@@ -14,7 +14,7 @@ mse loss normalized
 def mse_loss(output,target):
 
 
-    loss_fn = nn.MSELoss(reduce = False)
+    loss_fn = nn.MSELoss(reduction = 'none')
     loss = torch.sqrt(loss_fn(output, target)) / (target + 1e-3)
     loss = torch.mean(loss)
 
@@ -38,7 +38,7 @@ def mse_loss_plus_rank_loss(output,target):
 
     target_rank = torch.ones(inter.size())
 
-    loss_mse = nn.MSELoss(reduce = False)
+    loss_mse = nn.MSELoss(reduction = 'none')
     loss1 = torch.sqrt(loss_mse(cost, target_cost)) / (target_cost + 1e-3)
     loss1 = torch.mean(loss1)
 

@@ -31,9 +31,10 @@ class RNNExtend(AbstractGraphModule):
         # type: () -> torch.tensor
         return self._bb_init
 
-    def forward(self, embed):
+    def forward(self, batch):
         # type: (dt.DataItem) -> torch.tensor
         # embed size should be (# bbs, batch size, hidden size)
+        embed = torch.stack(batch.x).unsqueeze(1)
         _, final_state_packed = self.bb_rnn(embed, self.get_bb_init())
         final_state = final_state_packed[0]
 
