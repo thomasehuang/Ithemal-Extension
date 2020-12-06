@@ -149,7 +149,7 @@ def main():
         funcs = [os.path.join(args.files[0], f) for f in os.listdir(args.files[0]) \
                     if os.path.isdir(os.path.join(args.files[0], f))]
         for func in funcs:
-            bins = os.listdir(func)
+            bins = [b for b in os.listdir(func) if b.endswith('.out')]
             for b in bins:
                 predict(
                     model, data, os.path.join(func, b), args.verbose,
