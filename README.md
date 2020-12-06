@@ -27,14 +27,37 @@ cmake -DDynamoRIO_DIR=/path/to/dynamorio/cmake/folder ..
 make
 ```
 
+## Dataset
+```
+dataset
+├── function1                   # contains binary files that represents basic blocks in a function
+    ├── basicblock1.out         # binary file for a single basic block
+    ├── basicblock2.out
+    ├── ...
+    ├── basicblockM.out
+    └── CFG.json/xml            # contains profile information about the function
+├── function2
+├── ...
+├── functionN
+└── labels.csv                  # contains list of function -> throughput mappings
+```
+
 ## Save Basic Block Embeddings
 
-To save the final embedding of a basic block, use the `--save-embed` flag when running the `predict.py` script. This will automatically save the embedding to the same directory as the input binary. To execute on a batch of examples, you can simply input multiple files to the `--files` argument:
+To save the final embedding of a basic block, use the `--save-embed` flag when running the `predict.py` script. This will automatically save the embedding to the same directory as the input binary. For usage on our dataset, set `--files` to point to the dataset in the above format and use the `--extend` flag:
+```
+python learning/pytorch/predict.py --verbose --save-embed --extend \
+    --model ithemal-models/hsw.dump \
+    --model-data ithemal-models/hsw.mdl \
+    --files learning/pytorch/examples/test_dataset/
+```
+
+To execute on a batch of binary files, you can simply input multiple files to the `--files` argument:
 ```
 python learning/pytorch/predict.py --verbose --save-embed \
     --model ithemal-models/hsw.dump \
     --model-data ithemal-models/hsw.mdl \
-    --file  learning/pytorch/examples/example1.out \
+    --files learning/pytorch/examples/example1.out \
             learning/pytorch/examples/example2.out \
             learning/pytorch/examples/example3.out
 ```
