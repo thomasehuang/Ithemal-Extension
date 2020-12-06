@@ -8,6 +8,7 @@ import torch
 import models.graph_models as md
 import models.train as tr
 import training
+from data.data_extend import DataExtend
 from ithemal_utils import *
 from models.ithemal_extend import RNNExtend
 
@@ -106,7 +107,7 @@ def get_train_parameters(args):
 def load_data(params):
     # type: (BaseParameters) -> dt.DataCost
     # TODO (thomaseh): finish dataloader
-    data = None
+    data = DataExtend(params.data)
     # assert False
 
     return data
