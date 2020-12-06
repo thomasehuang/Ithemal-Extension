@@ -129,6 +129,7 @@ def main():
     parser.add_argument('--verbose', help='Whether to be verbose', action='store_true', default=False)
     parser.add_argument('--parallel', help='How many parallel threads to run', type=int, default=1)
     parser.add_argument('--save-embed', help='Whether to save embed', action='store_true', default=False)
+    parser.add_argument('--extend', help='Whether to use extended version of dataset', action='store_true', default=False)
 
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument('--raw-stdin', help='Whether to read newline-separated raw hex from stdin', action='store_true', default=False)
@@ -142,14 +143,26 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.raw_stdin:
-        predict_raw(args.model, args.model_data, args.verbose, args.parallel)
-    else:
+    if args.extend:
+        assert len(args.files) == 1
         (model, data) = load_model_and_data(args.model, args.model_data)
-        for fname in args.files:
-            predict(
-                model, data, fname, args.verbose,
-                fname if args.save_embed else None)
+        funcs = [os.path.join(args.files[0], f) for f in os.listdir(args.files[0]) \
+                    if os.path.isdir(os.path.join(args.files[0], f))]
+        for func in funcs:
+            bins = os.listdir(func)
+            for b in bins:
+                predict(
+                    model, data, os.path.join(func, b), args.verbose,
+                    os.path.join(func, b) if args.save_embed else None)
+    else:
+        if args.raw_stdin:
+            predict_raw(args.model, args.model_data, args.verbose, args.parallel)
+        else:
+            (model, data) = load_model_and_data(args.model, args.model_data)
+            for fname in args.files:
+                predict(
+                    model, data, fname, args.verbose,
+                    fname if args.save_embed else None)
 
 if __name__ == '__main__':
     main()
