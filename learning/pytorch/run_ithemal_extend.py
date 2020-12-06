@@ -5,39 +5,14 @@ sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 import argparse
 import torch
 
+import models.graph_models as md
 import models.train as tr
 import training
 from ithemal_utils import *
+from models.ithemal_extend import RNNExtend
 
 
-def load_data(params):
-    # type: (BaseParameters) -> dt.DataCost
-    # TODO (thomaseh): finish dataloader
-    data = None
-    assert False
-
-    return data
-
-
-def load_model(params):
-    # type: (BaseParameters) -> md.AbstractGraphModule
-    rnn_params = RnnParameters(
-        embedding_size=params.embed_size,
-        hidden_size=params.hidden_size,
-        num_classes=1,
-        connect_tokens=False,           # NOT USED
-        skip_connections=False,         # NOT USED
-        hierarchy_type='MULTISCALE',    # NOT USED
-        rnn_type='LSTM',                # NOT USED
-        learn_init=True,                # NOT USED
-    )
-    model = RNNExtend(rnn_params)
-
-    return model
-
-
-def main():
-    # type: () -> None
+def get_parser():
     parser = argparse.ArgumentParser()
 
     # data arguments
@@ -72,8 +47,10 @@ def main():
     optimizer_group.add_argument('--adam-shared', action='store_const', const=tr.OptimizerType.ADAM_SHARED, dest='optimizer', help='Use Adam with shared moments')
     optimizer_group.add_argument('--sgd', action='store_const', const=tr.OptimizerType.SGD, dest='optimizer', help='Use SGD')
 
-    args = parser.parse_args()
+    return parser
 
+
+def get_base_parameters(args):
     base_params = BaseParameters(
         data=args.data,
         embed_mode=None,
@@ -100,28 +77,73 @@ def main():
         dag_nonlinearity_width=None,
         dag_nonlinear_before_max=None,
     )
+    return base_params
+
+
+def get_train_parameters(args):
+    train_params = TrainParameters(
+        experiment_name=args.experiment_name,
+        experiment_time=args.experiment_time,
+        load_file=args.load_file,
+        batch_size=args.batch_size,
+        trainers=args.trainers,
+        threads=args.threads,
+        decay_trainers=args.decay_trainers,
+        weight_decay=args.weight_decay,
+        initial_lr=args.initial_lr,
+        decay_lr=args.decay_lr,
+        epochs=args.epochs,
+        split=None,
+        optimizer=args.optimizer,
+        momentum=args.momentum,
+        nesterov=args.nesterov,
+        weird_lr=args.weird_lr,
+        lr_decay_rate=args.lr_decay_rate,
+    )
+    return train_params
+
+
+def load_data(params):
+    # type: (BaseParameters) -> dt.DataCost
+    # TODO (thomaseh): finish dataloader
+    data = None
+    # assert False
+
+    return data
+
+
+def load_model(params):
+    # type: (BaseParameters) -> md.AbstractGraphModule
+    rnn_params = md.RnnParameters(
+        embedding_size=params.embed_size,
+        hidden_size=params.hidden_size,
+        num_classes=1,
+        connect_tokens=False,           # NOT USED
+        skip_connections=False,         # NOT USED
+        hierarchy_type='MULTISCALE',    # NOT USED
+        rnn_type='LSTM',                # NOT USED
+        learn_init=True,                # NOT USED
+    )
+    model = RNNExtend(rnn_params)
+
+    return model
+
+
+def main():
+    # type: () -> None
+    args = get_parser().parse_args()
+
+    base_params = get_base_parameters(args)
 
     if args.subparser == 'train':
-        train_params = TrainParameters(
-            experiment_name=args.experiment_name,
-            experiment_time=args.experiment_time,
-            load_file=args.load_file,
-            batch_size=args.batch_size,
-            trainers=args.trainers,
-            threads=args.threads,
-            decay_trainers=args.decay_trainers,
-            weight_decay=args.weight_decay,
-            initial_lr=args.initial_lr,
-            decay_lr=args.decay_lr,
-            epochs=args.epochs,
-            split=None,
-            optimizer=args.optimizer,
-            momentum=args.momentum,
-            nesterov=args.nesterov,
-            weird_lr=args.weird_lr,
-            lr_decay_rate=args.lr_decay_rate,
-        )
+        train_params = get_train_parameters(args)
         # training.run_training_coordinator(base_params, train_params)
+
+        # load data and model
+        data = load_data(base_params)
+        model = load_model(base_params)
+
+        trainer = training.load_trainer(base_params, train_params, model, data)
     else:
         raise ValueError('Unknown mode "{}"'.format(args.subparser))
 
