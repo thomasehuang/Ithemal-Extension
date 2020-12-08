@@ -57,9 +57,13 @@ bool filter_instr(instr_t * instr){
   }
 
   int i;
-  uint32_t omitted[10] = {OP_rep_ins, OP_rep_outs, OP_rep_movs, OP_rep_stos, OP_rep_lods, OP_rep_cmps, OP_rep_scas, OP_repne_cmps, OP_repne_scas, OP_xbegin};
+  uint32_t omitted[12] = {
+    OP_rep_ins, OP_rep_outs, OP_rep_movs, OP_rep_stos, OP_rep_lods, OP_rep_cmps,
+    OP_rep_scas, OP_repne_cmps, OP_repne_scas, OP_xbegin,
+    OP_jl, OP_jl_short,
+  };
 
-  for(i = 0; i <10; i++){
+  for(i = 0; i < 12; i++){
     if(instr_get_opcode(instr) == omitted[i]){
       return true;
     }
