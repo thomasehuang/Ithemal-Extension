@@ -163,7 +163,6 @@ class GraphNN(AbstractGraphModule):
 
     def create_graphlstm(self, function):
         # type: (ut.BasicBlock) -> torch.tensor
-
         leaves = function.find_leaves()
 
         leaf_hidden = []
@@ -181,7 +180,6 @@ class GraphNN(AbstractGraphModule):
 
     def create_graphlstm_rec(self, bblock):
         # type: (ut.Instruction) -> torch.tensor
-
         if bblock.hidden != None:
             return bblock.hidden
 
@@ -193,19 +191,15 @@ class GraphNN(AbstractGraphModule):
         else:
             in_hidden_ins = self.init_hidden()
 
-        out_ins, hidden_ins = self.lstm_ins(bblock.embed, in_hidden_ins)
+        out_ins, hidden_ins = self.lstm_ins(
+            bblock.embed.unsqueeze(0).unsqueeze(0), in_hidden_ins)
         bblock.hidden = hidden_ins
 
         return bblock.hidden
 
     def create_residual_lstm(self, function):
         # type: (ut.BasicBlock) -> torch.tensor
-
-        ins_embeds = autograd.Variable(torch.zeros(len(function.bblocks),self.embedding_size))
-        for i, bbs in enumerate(function.bblocks):
-            ins_embeds[i] = self.get_instruction_embedding(ins, True).squeeze()
-
-        ins_embeds_lstm = ins_embeds.unsqueeze(1)
+        ins_embeds_lstm = function.get_embedding().unsqueeze(1)
 
         _, hidden_ins = self.lstm_ins_seq(ins_embeds_lstm, self.init_hidden())
 
@@ -215,7 +209,6 @@ class GraphNN(AbstractGraphModule):
 
     def forward(self, item):
         # type: (dt.DataItem) -> torch.tensor
-
         self.init_funclstm(item)
 
         final_pred = torch.zeros(self.num_classes).squeeze()
@@ -239,10 +232,15 @@ class GraphNN(AbstractGraphModule):
 
 class BasicBlock:
 
-    def __init__(self, embed):
+    def __init__(self, embed, name='', bb_id=None):
         self.embed = embed
+        self.name = name
+        self.bb_id = bb_id
+
         self.parents = []
         self.children = []
+        self.parents_probs = []
+        self.children_probs = []
 
         #for lstms
         self.lstm = None
@@ -250,12 +248,24 @@ class BasicBlock:
         self.tokens = None
 
     def print_bb(self):
-        num_parents = [parent.num for parent in self.parents]
-        num_children = [child.num for child in self.children]
-        print num_parents, num_children
+        print('#####')
+        print('Function: %s, BasicBlock %d' % (self.name, self.bb_id))
+        print('')
+        if len(self.parents) > 0:
+            print('Parents:')
+            for i, parent in enumerate(self.parents):
+                print(parent.__str__() + ', Edge Prob = %.2f' % (self.parents_probs[i]))
+            print('')
+        if len(self.children) > 0:
+            print('Children:')
+            for i, child in enumerate(self.children):
+                print(child.__str__() + ', Edge Prob = %.2f' % (self.children_probs[i]))
+            print('')
+        print('#####')
 
     def __str__(self):
-        return self.intel
+        return 'Function: %s, BasicBlock %d: %d parents and %d children' % (
+            self.name, self.bb_id, len(self.parents), len(self.children))
 
 
 class Function:
@@ -269,6 +279,9 @@ class Function:
     def print_function(self):
         for bblock in self.bblocks:
             bblock.print_bb()
+
+    def get_embedding(self):
+        return torch.stack([bb.embed for bb in self.bblocks])
 
     def linearize_edges(self):
         for fst, snd in zip(self.bblocks, self.bblocks[1:]):
