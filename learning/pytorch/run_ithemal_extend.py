@@ -12,20 +12,26 @@ import training
 from data.data_extend import DataExtend
 from experiments.experiment import Experiment
 from ithemal_utils import *
-from models.ithemal_extend import RNNExtend
+from models.ithemal_extend import RNNExtend, GraphNN
 
 
 def get_parser():
     parser = argparse.ArgumentParser()
 
-    # data arguments
+    # data
     parser.add_argument('--data', required=True, help='The data file to load from')
     parser.add_argument('--embed-size', help='The size of embedding to use (default: 256)', default=256, type=int)
     parser.add_argument('--hidden-size', help='The size of hidden layer to use (default: 256)', default=256, type=int)
     parser.add_argument('--no-mem', help='Remove all instructions with memory', default=False, action='store_true')
 
+    parser.add_argument('--use-rnn', action='store_true', default=False)
+    parser.add_argument('--no-residual', default=False, action='store_true', help='Don\'t use a residual model in Ithemal')
+    parser.add_argument('--no-dag-rnn', default=False, action='store_true', help='Don\'t use the DAG-RNN model in Ithemal')
+    #
+
     sp = parser.add_subparsers(dest='subparser')
 
+    # train
     train = sp.add_parser('train', help='Train an ithemal model')
     train.add_argument('--experiment-name', required=True, help='Name of the experiment to run')
     train.add_argument('--experiment-time', required=True, help='Time the experiment was started at')
@@ -43,12 +49,33 @@ def get_parser():
     train.add_argument('--nesterov', action='store_true', default=False, help='Use Nesterov momentum')
     train.add_argument('--weird-lr', action='store_true', default=False, help='Use unusual LR schedule')
     train.add_argument('--lr-decay-rate', default=1.2, help='LR division rate', type=float)
+    #
 
+    # GraphNN
+
+    dag_nonlinearity_group = parser.add_mutually_exclusive_group()
+    dag_nonlinearity_group.add_argument('--dag-relu-nonlinearity', action='store_const', const=md.NonlinearityType.RELU, dest='dag_nonlinearity')
+    dag_nonlinearity_group.add_argument('--dag-tanh-nonlinearity', action='store_const', const=md.NonlinearityType.TANH, dest='dag_nonlinearity')
+    dag_nonlinearity_group.add_argument('--dag-sigmoid-nonlinearity', action='store_const', const=md.NonlinearityType.SIGMOID, dest='dag_nonlinearity')
+    parser.set_defaults(dag_nonlinearity=None)
+    parser.add_argument('--dag-nonlinearity-width', help='The width of the final nonlinearity (default: 128)', default=128, type=int)
+    parser.add_argument('--dag-nonlinear-before-max', action='store_true', default=False)
+
+    dag_reduction_group = parser.add_mutually_exclusive_group()
+    dag_reduction_group.add_argument('--dag-add-reduction', action='store_const', const=md.ReductionType.ADD, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-max-reduction', action='store_const', const=md.ReductionType.MAX, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-mean-reduction', action='store_const', const=md.ReductionType.MEAN, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-attention-reduction', action='store_const', const=md.ReductionType.ATTENTION, dest='dag_reduction')
+    parser.set_defaults(dag_reduction=md.ReductionType.MAX)
+    #
+
+    # optimizer
     optimizer_group = train.add_mutually_exclusive_group()
     optimizer_group.add_argument('--adam-private', action='store_const', const=tr.OptimizerType.ADAM_PRIVATE, dest='optimizer', help='Use Adam with private moments',
                                  default=tr.OptimizerType.ADAM_PRIVATE)
     optimizer_group.add_argument('--adam-shared', action='store_const', const=tr.OptimizerType.ADAM_SHARED, dest='optimizer', help='Use Adam with shared moments')
     optimizer_group.add_argument('--sgd', action='store_const', const=tr.OptimizerType.SGD, dest='optimizer', help='Use SGD')
+    #
 
     return parser
 
@@ -60,14 +87,14 @@ def get_base_parameters(args):
         embed_file=None,
         random_edge_freq=None,
         predict_log=None,
-        no_residual=None,
-        no_dag_rnn=None,
-        dag_reduction=None,
+        no_residual=args.no_residual,
+        no_dag_rnn=args.no_dag_rnn,
+        dag_reduction=args.dag_reduction,
         edge_ablation_types=None,
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,
         linear_embeddings=None,
-        use_rnn=None,
+        use_rnn=args.use_rnn,
         rnn_type=None,
         rnn_hierarchy_type=None,
         rnn_connect_tokens=None,
@@ -76,9 +103,9 @@ def get_base_parameters(args):
         no_mem=args.no_mem,
         linear_dependencies=None,
         flat_dependencies=None,
-        dag_nonlinearity=None,
-        dag_nonlinearity_width=None,
-        dag_nonlinear_before_max=None,
+        dag_nonlinearity=args.dag_nonlinearity,
+        dag_nonlinearity_width=args.dag_nonlinearity_width,
+        dag_nonlinear_before_max=args.dag_nonlinear_before_max,
     )
     return base_params
 
@@ -117,17 +144,27 @@ def load_data(params):
 
 def load_model(params):
     # type: (BaseParameters) -> md.AbstractGraphModule
-    rnn_params = md.RnnParameters(
-        embedding_size=params.embed_size,
-        hidden_size=params.hidden_size,
-        num_classes=1,
-        connect_tokens=False,           # NOT USED
-        skip_connections=False,         # NOT USED
-        hierarchy_type='MULTISCALE',    # NOT USED
-        rnn_type='LSTM',                # NOT USED
-        learn_init=True,                # NOT USED
-    )
-    model = RNNExtend(rnn_params)
+    if params.use_rnn:
+        rnn_params = md.RnnParameters(
+            embedding_size=params.embed_size,
+            hidden_size=params.hidden_size,
+            num_classes=1,
+            connect_tokens=False,           # NOT USED
+            skip_connections=False,         # NOT USED
+            hierarchy_type='MULTISCALE',    # NOT USED
+            rnn_type='LSTM',                # NOT USED
+            learn_init=True,                # NOT USED
+        )
+        model = RNNExtend(rnn_params)
+    else:
+        model = GraphNN(
+            embedding_size=params.embed_size, hidden_size=params.hidden_size,
+            num_classes=1, use_residual=not params.no_residual,
+            use_dag_rnn=not params.no_dag_rnn, reduction=params.dag_reduction,
+            nonlinear_type=params.dag_nonlinearity,
+            nonlinear_width=params.dag_nonlinearity_width,
+            nonlinear_before_max=params.dag_nonlinear_before_max,
+        )
 
     return model
 

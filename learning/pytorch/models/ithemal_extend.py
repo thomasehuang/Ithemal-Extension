@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
+from enum import Enum, unique
 
 import torch
 import torch.nn as nn
@@ -39,3 +40,253 @@ class RNNExtend(AbstractGraphModule):
         final_state = final_state_packed[0]
 
         return self.linear(final_state.squeeze()).squeeze()
+
+
+@unique
+class ReductionType(Enum):
+    MAX = 0
+    ADD = 1
+    MEAN = 2
+    ATTENTION = 3
+
+
+@unique
+class NonlinearityType(Enum):
+    RELU = 0
+    SIGMOID = 1
+    TANH = 2
+
+
+class GraphNN(AbstractGraphModule):
+
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, use_dag_rnn=True, reduction=ReductionType.MAX, nonlinear_width=128, nonlinear_type=NonlinearityType.RELU, nonlinear_before_max=False):
+        # type: (int, int, int, bool, bool, bool, ReductionType, int, NonlinearityType, bool) -> None
+        super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
+
+        assert use_residual or use_dag_rnn, 'Must use some type of predictor'
+
+        self.use_residual = use_residual
+        self.use_dag_rnn = use_dag_rnn
+
+        #lstm - input size, hidden size, num layers
+        self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
+
+        # linear weight for instruction embedding
+        self.opcode_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        self.src_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        self.dst_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        # for sequential model
+        self.opcode_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+        self.src_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+        self.dst_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+
+        #linear layer for final regression result
+        self.linear = nn.Linear(self.hidden_size,self.num_classes)
+
+        self.nonlinear_1 = nn.Linear(self.hidden_size, nonlinear_width)
+        self.nonlinear_2 = nn.Linear(nonlinear_width, self.num_classes)
+
+        #lstm - for sequential model
+        self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
+        self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
+
+        self.reduction_typ = reduction
+        self.attention_1 = nn.Linear(self.hidden_size, self.hidden_size // 2)
+        self.attention_2 = nn.Linear(self.hidden_size // 2, 1)
+
+        self.nonlinear_premax_1 = nn.Linear(self.hidden_size, self.hidden_size * 2)
+        self.nonlinear_premax_2 = nn.Linear(self.hidden_size * 2, self.hidden_size)
+
+        self.nonlinear_seq_1 = nn.Linear(self.hidden_size, nonlinear_width)
+        self.nonlinear_seq_2 = nn.Linear(nonlinear_width, self.num_classes)
+
+        self.use_nonlinear = nonlinear_type is not None
+
+        if nonlinear_type == NonlinearityType.RELU:
+            self.final_nonlinearity = torch.relu
+        elif nonlinear_type == NonlinearityType.SIGMOID:
+            self.final_nonlinearity = torch.sigmoid
+        elif nonlinear_type == NonlinearityType.TANH:
+            self.final_nonlinearity = torch.tanh
+
+        self.nonlinear_before_max = nonlinear_before_max
+
+    def reduction(self, items):
+        # type: (List[torch.tensor]) -> torch.tensor
+        if len(items) == 0:
+            return self.init_hidden()[0]
+        elif len(items) == 1:
+            return items[0]
+
+        def binary_reduction(reduction):
+            # type: (Callable[[torch.tensor, torch.tensor], torch.tensor]) -> torch.tensor
+            final = items[0]
+            for item in items[1:]:
+                final = reduction(final, item)
+            return final
+
+        stacked_items = torch.stack(items)
+
+        if self.reduction_typ == ReductionType.MAX:
+            return binary_reduction(torch.max)
+        elif self.reduction_typ == ReductionType.ADD:
+            return binary_reduction(torch.add)
+        elif self.reduction_typ == ReductionType.MEAN:
+            return binary_reduction(torch.add) / len(items)
+        elif self.reduction_typ == ReductionType.ATTENTION:
+            preds = torch.stack([self.attention_2(torch.relu(self.attention_1(item))) for item in items])
+            probs = F.softmax(preds, dim=0)
+            print('{}, {}, {}'.format(
+                probs.shape,
+                stacked_items.shape,
+                stacked_items * probs
+            ))
+            return (stacked_items * probs).sum(dim=0)
+        else:
+            raise ValueError()
+
+    def remove_refs(self, item):
+        # type: (dt.DataItem) -> None
+        for bblock in item.function.bblocks:
+            if bblock.lstm != None:
+                del bblock.lstm
+            if bblock.hidden != None:
+                del bblock.hidden
+            bblock.lstm = None
+            bblock.hidden = None
+
+    def init_funclstm(self, item):
+        # type: (dt.DataItem) -> None
+        self.remove_refs(item)
+
+    def create_graphlstm(self, function):
+        # type: (ut.BasicBlock) -> torch.tensor
+
+        leaves = function.find_leaves()
+
+        leaf_hidden = []
+        for leaf in leaves:
+            hidden = self.create_graphlstm_rec(leaf)
+            leaf_hidden.append(hidden[0].squeeze())
+
+        if self.nonlinear_before_max:
+            leaf_hidden = [
+                self.nonlinear_premax_2(torch.relu(self.nonlinear_premax_1(h)))
+                for h in leaf_hidden
+            ]
+
+        return self.reduction(leaf_hidden)
+
+    def create_graphlstm_rec(self, bblock):
+        # type: (ut.Instruction) -> torch.tensor
+
+        if bblock.hidden != None:
+            return bblock.hidden
+
+        parent_hidden = [self.create_graphlstm_rec(parent) for parent in bblock.parents]
+
+        if len(parent_hidden) > 0:
+            hs, cs = list(zip(*parent_hidden))
+            in_hidden_ins = (self.reduction(hs), self.reduction(cs))
+        else:
+            in_hidden_ins = self.init_hidden()
+
+        out_ins, hidden_ins = self.lstm_ins(bblock.embed, in_hidden_ins)
+        bblock.hidden = hidden_ins
+
+        return bblock.hidden
+
+    def create_residual_lstm(self, function):
+        # type: (ut.BasicBlock) -> torch.tensor
+
+        ins_embeds = autograd.Variable(torch.zeros(len(function.bblocks),self.embedding_size))
+        for i, bbs in enumerate(function.bblocks):
+            ins_embeds[i] = self.get_instruction_embedding(ins, True).squeeze()
+
+        ins_embeds_lstm = ins_embeds.unsqueeze(1)
+
+        _, hidden_ins = self.lstm_ins_seq(ins_embeds_lstm, self.init_hidden())
+
+        seq_ret = hidden_ins[0].squeeze()
+
+        return seq_ret
+
+    def forward(self, item):
+        # type: (dt.DataItem) -> torch.tensor
+
+        self.init_funclstm(item)
+
+        final_pred = torch.zeros(self.num_classes).squeeze()
+
+        if self.use_dag_rnn:
+            graph = self.create_graphlstm(item.function)
+            if self.use_nonlinear and not self.nonlinear_before_max:
+                final_pred += self.nonlinear_2(self.final_nonlinearity(self.nonlinear_1(graph))).squeeze()
+            else:
+                final_pred += self.linear(graph).squeeze()
+
+        if self.use_residual:
+            sequential = self.create_residual_lstm(item.function)
+            if self.use_nonlinear:
+                final_pred += self.nonlinear_seq_2(self.final_nonlinearity(self.nonlinear_seq_1(sequential))).squeeze()
+            else:
+                final_pred += self.linear(sequential).squeeze()
+
+        return final_pred.squeeze()
+
+
+class BasicBlock:
+
+    def __init__(self, embed):
+        self.embed = embed
+        self.parents = []
+        self.children = []
+
+        #for lstms
+        self.lstm = None
+        self.hidden = None
+        self.tokens = None
+
+    def print_bb(self):
+        num_parents = [parent.num for parent in self.parents]
+        num_children = [child.num for child in self.children]
+        print num_parents, num_children
+
+    def __str__(self):
+        return self.intel
+
+
+class Function:
+
+    def __init__(self, bblocks):
+        self.bblocks = bblocks
+
+    def num_bblocks(self):
+        return len(self.bblocks)
+
+    def print_function(self):
+        for bblock in self.bblocks:
+            bblock.print_bb()
+
+    def linearize_edges(self):
+        for fst, snd in zip(self.bblocks, self.bblocks[1:]):
+            if snd not in fst.children:
+                fst.children.append(snd)
+            if fst not in snd.parents:
+                snd.parents.append(fst)
+
+    def find_roots(self):
+        roots = []
+        for bblock in self.bblocks:
+            if len(bblock.parents) == 0:
+                roots.append(bblock)
+        return roots
+
+    def find_leaves(self):
+        leaves = []
+        for bblock in self.bblocks:
+            if len(bblock.children) == 0:
+                leaves.append(bblock)
+        return leaves

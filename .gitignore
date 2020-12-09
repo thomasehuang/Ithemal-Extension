@@ -105,6 +105,7 @@ costmodel_*.sql
 build_scripts/
 local/
 *.embed
+data/
 
 #==============================================================================#
 # Custom Ithemal/Docker ignores
