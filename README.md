@@ -21,7 +21,7 @@ curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_
 
 Build data tools (requires DynamoRIO):
 ```
-cd Ithemal-Extension
+cd Ithemal-Extension/data_collection
 mkdir build; cd build
 cmake -DDynamoRIO_DIR=/path/to/dynamorio/cmake/folder ..
 make
