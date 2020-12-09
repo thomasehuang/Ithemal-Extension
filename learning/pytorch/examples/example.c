@@ -30,5 +30,7 @@ int kernel(int max) {
 
 int main(int argc, char **argv) {
   printf("kernel: %d\n", kernel(10));
+  IACA_START
+  IACA_END
   return 0;
 }

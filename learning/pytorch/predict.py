@@ -49,22 +49,32 @@ def datum_of_code(data, block_hex, verbose):
     data.prepare_data(fixed=True, progress=False)
     return data.data[-1]
 
-def read_basic_block(fname, data, verbose):
+def read_basic_block(fname, data, verbose, wholeFile=False):
     with open(fname, 'rb') as f:
         code = f.read(-1)
-    start_pos = code.index(START_MARKER)
-    if start_pos == -1:
-        raise ValueError('START MARKER NOT FOUND')
+    if wholeFile:
+        block_binary = code
+    else:
+        start_pos = code.index(START_MARKER)
+        if start_pos == -1:
+            raise ValueError('START MARKER NOT FOUND')
 
-    end_pos = code.index(END_MARKER)
-    if end_pos == -1:
-        raise ValueError('END MARKER NOT FOUND')
+        end_pos = code.index(END_MARKER)
+        if end_pos == -1:
+            raise ValueError('END MARKER NOT FOUND')
 
-    block_binary = code[start_pos+len(START_MARKER):end_pos]
+        block_binary = code[start_pos+len(START_MARKER):end_pos]
     return datum_of_code(data, binascii.b2a_hex(block_binary), verbose)
 
-def predict(model, data, fname, verbose, save_embed=False):
-    datum = read_basic_block(fname, data, verbose)
+def predict(model, data, fname, verbose, save_embed=False, wholeFile=False):
+    try:
+        datum = read_basic_block(fname, data, verbose, wholeFile=wholeFile)
+    except ValueError:
+        print('No markers found in', fname)
+        return
+    if len(datum.block.instrs) == 0:
+        print('No code between markers in', fname)
+        return
     if verbose:
         print('='*40)
         print('\n'.join(i.intel for i in datum.block.instrs))
@@ -146,20 +156,25 @@ def main():
     if args.extend:
         assert len(args.files) == 1
         (model, data) = load_model_and_data(args.model, args.model_data)
-        funcs = [os.path.join(args.files[0], f) for f in os.listdir(args.files[0]) \
-                    if os.path.isdir(os.path.join(args.files[0], f))]
-        for func in funcs:
-            bins = [b for b in os.listdir(func) if b.endswith('.out')]
+
+        datasetRoot = args.files[0]
+        binaryExt = ('.o', '.out')
+        for dirpath, subdirs, files in os.walk(datasetRoot):
+            bins = [b for b in files if b.endswith(binaryExt)]
             for b in bins:
+                bPath = os.path.join(dirpath, b)
+                print('Predicting', bPath)
                 predict(
-                    model, data, os.path.join(func, b), args.verbose,
-                    os.path.join(func, b) if args.save_embed else None)
+                    model, data, bPath, args.verbose,
+                    bPath if args.save_embed else None,
+                    wholeFile=False)
     else:
         if args.raw_stdin:
             predict_raw(args.model, args.model_data, args.verbose, args.parallel)
         else:
             (model, data) = load_model_and_data(args.model, args.model_data)
             for fname in args.files:
+                print('Predicting', fname)
                 predict(
                     model, data, fname, args.verbose,
                     fname if args.save_embed else None)
