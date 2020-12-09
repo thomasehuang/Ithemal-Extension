@@ -14,6 +14,12 @@ Install all the necessary packages:
 pip install -r requirements.txt
 ```
 
+Install common_libs:
+```
+cd common
+pip install -e .
+```
+
 Install DynamoRIO for the tokenizer:
 ```
 curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz -C /path/to/dynamorio
@@ -21,7 +27,7 @@ curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_
 
 Build data tools (requires DynamoRIO):
 ```
-cd Ithemal-Extension/data_collection
+cd Ithemal-Extension
 mkdir build; cd build
 cmake -DDynamoRIO_DIR=/path/to/dynamorio/cmake/folder ..
 make
@@ -61,6 +67,17 @@ python learning/pytorch/predict.py --verbose --save-embed \
             learning/pytorch/examples/example2.out \
             learning/pytorch/examples/example3.out
 ```
+
+## Training
+
+To train our extended version of Ithemal, you can run the following:
+```
+python learning/pytorch/run_ithemal_extend.py \
+    --data learning/pytorch/examples/test_dataset/ \
+    train --experiment-name TEST_RUN --experiment-time TODAY \
+    --sgd --trainers 1 --weird-lr --decay-lr --epochs 20
+```
+See all available config parameters in `learning/pytorch/run_ithemal_extend.py`.
 
 ---
 

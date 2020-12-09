@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import argparse
 import binascii
-import utilities as ut
+import common_libs.utilities as ut
 import copy
 import data.data_cost as dt
 import itertools
