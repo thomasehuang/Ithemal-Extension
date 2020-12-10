@@ -77,7 +77,17 @@ python learning/pytorch/run_ithemal_extend.py \
     train --experiment-name TEST_RUN --experiment-time TODAY \
     --sgd --trainers 1 --weird-lr --decay-lr --epochs 20
 ```
-See all available config parameters in `learning/pytorch/run_ithemal_extend.py`.
+See all available config parameters in `learning/pytorch/run_ithemal_extend.py`. Checkpoints of the trained model will be saved in `learning/pytorch/saved/TEST_RUN/TODAY/checkpoints/` under the corresponding timestamp for the run.
+
+## Evaluation
+
+To test the model, use the `--test` flag and specify the path to the model checkpoint file with `--load-file`:
+```
+python learning/pytorch/run_ithemal_extend.py \
+    --data learning/pytorch/examples/test_dataset/ --use-rnn \
+    train --experiment-name TEST_RUN --experiment-time TODAY \
+    --test --load-file /path/to/model/checkpoint
+```
 
 ---
 
