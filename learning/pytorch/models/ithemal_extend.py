@@ -275,8 +275,9 @@ class BasicBlock:
 
 class Function:
 
-    def __init__(self, bblocks):
+    def __init__(self, bblocks, name=''):
         self.bblocks = bblocks
+        self.name = name
 
     def num_bblocks(self):
         return len(self.bblocks)

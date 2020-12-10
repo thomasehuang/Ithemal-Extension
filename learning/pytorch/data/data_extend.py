@@ -21,7 +21,7 @@ class DataExtend(object):
         self.load_data(data_path, use_rnn)
 
     def load_data(self, data_path, use_rnn):
-        self.train = []
+        self.data, self.train, self.test = [], [], []
         data = []
         with open(os.path.join(data_path, 'labels.csv')) as csvfile:
             csvreader = csv.reader(csvfile, delimiter=' ', quotechar='|')
@@ -52,7 +52,8 @@ class DataExtend(object):
             # create DataItem
             if use_rnn:
                 # regular RNN
-                self.train.append(DataItem(x, float(d[1]), None, None))
+                self.data.append(
+                    DataItem(x, float(d[1]), Function([], d[0]), None))
             else:
                 # GraphNN
                 # create BasicBlock objects for each block
@@ -73,5 +74,9 @@ class DataExtend(object):
                         basicblock.children_probs.append(dest[1])
                         basicblocks[dest[0]].parents.append(basicblock)
                         basicblocks[dest[0]].parents_probs.append(dest[1])
-                self.train.append(
-                    DataItem(x, float(d[1]), Function(basicblocks), None))
+                self.data.append(
+                    DataItem(x, float(d[1]), Function(basicblocks, d[0]), None))
+        # split data into train and val
+        idx = int(len(self.data) * 0.8)
+        self.train = self.data[:idx]
+        self.test = self.data[idx:]

@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
 import argparse
+import datetime
 import random
 import torch
 
@@ -36,6 +37,7 @@ def get_parser():
     train.add_argument('--experiment-name', required=True, help='Name of the experiment to run')
     train.add_argument('--experiment-time', required=True, help='Time the experiment was started at')
     train.add_argument('--load-file', help='Start by loading the provided model')
+    train.add_argument('--test', action='store_true', help='Test mode', default=False)
 
     train.add_argument('--batch-size', type=int, default=4, help='The batch size to use in train')
     train.add_argument('--epochs', type=int, default=3, help='Number of epochs to run for')
@@ -52,7 +54,6 @@ def get_parser():
     #
 
     # GraphNN
-
     dag_nonlinearity_group = parser.add_mutually_exclusive_group()
     dag_nonlinearity_group.add_argument('--dag-relu-nonlinearity', action='store_const', const=md.NonlinearityType.RELU, dest='dag_nonlinearity')
     dag_nonlinearity_group.add_argument('--dag-tanh-nonlinearity', action='store_const', const=md.NonlinearityType.TANH, dest='dag_nonlinearity')
@@ -169,6 +170,40 @@ def load_model(params):
     return model
 
 
+def get_save_directory(exp_name, exp_time):
+    now = datetime.datetime.now()
+    timestamp = '%d%02d%02d%02d%02d%02d' % (
+        now.year, now.month, now.day, now.hour, now.minute, now.second)
+    save_path = os.path.join(
+        'learning/pytorch/saved', exp_name, exp_time, 'checkpoints', timestamp)
+    return save_path
+
+
+def train(data, model, base_params, train_params, save_dir):
+    trainer = training.load_trainer(base_params, train_params, model, data)
+    expt = Experiment(
+        train_params.experiment_name, train_params.experiment_time,
+        base_params.data)
+    loss_reporter = training.LossReporter(expt, len(data.train), trainer)
+    def report_loss_fn(msg):
+        loss_reporter.report_items(msg.n_items, msg.loss)
+
+    for epoch_no in range(train_params.epochs):
+        loss_reporter.start_epoch(epoch_no + 1, 0)
+        random.shuffle(data.train)
+        trainer.train(report_loss_fn=report_loss_fn)
+        loss_reporter.report()
+        if epoch_no % 1 == 0:
+            save_file = os.path.join(save_dir, 'epoch_%03d.mdl' % (epoch_no+1,))
+            trainer.save_checkpoint(epoch_no, -1, save_file)
+
+    return trainer
+
+
+def test(trainer, save_dir):
+    trainer.validate(os.path.join(save_dir, 'results.csv'))
+
+
 def main():
     # type: () -> None
     args = get_parser().parse_args()
@@ -177,25 +212,26 @@ def main():
 
     if args.subparser == 'train':
         train_params = get_train_parameters(args)
-        # training.run_training_coordinator(base_params, train_params)
 
         # load data and model
+        print('Loading data and setting up model...')
         data = load_data(base_params)
         model = load_model(base_params)
 
-        trainer = training.load_trainer(base_params, train_params, model, data)
-        expt = Experiment(
-            train_params.experiment_name, train_params.experiment_time,
-            base_params.data)
-        loss_reporter = training.LossReporter(expt, len(data.train), trainer)
-        def report_loss_fn(msg):
-            loss_reporter.report_items(msg.n_items, msg.loss)
+        if not args.test:
+            # train
+            print('Training...')
+            save_dir = get_save_directory(
+                train_params.experiment_name, train_params.experiment_time)
+            trainer = train(data, model, base_params, train_params, save_dir)
+        else:
+            trainer = training.load_trainer(base_params, train_params, model, data)
+            trainer.load_checkpoint(args.load_file)
+            save_dir = '/'.join(args.load_file.split('/')[:-1])
 
-        for epoch_no in range(train_params.epochs):
-            loss_reporter.start_epoch(epoch_no + 1, 0)
-            random.shuffle(data.train)
-            trainer.train(report_loss_fn=report_loss_fn)
-            loss_reporter.report()
+        # test
+        print('Testing...')
+        test(trainer, save_dir)
     else:
         raise ValueError('Unknown mode "{}"'.format(args.subparser))
 

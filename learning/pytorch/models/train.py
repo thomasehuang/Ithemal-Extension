@@ -349,7 +349,9 @@ class Train():
                 actual.append(target.data.numpy().tolist())
                 predicted.append(output.data.numpy().tolist())
 
-            self.print_final(f, output, target)
+            # self.print_final(f, output, target)
+            f.write('%s,%f,%f\n' % (item.function.name, target, output))
+
             losses = self.loss_fn(output, target)
             if self.typ == PredictionType.CLASSIFICATION:
                 self.correct_classification(output, target)
@@ -362,21 +364,22 @@ class Train():
                 loss += l
                 average_loss[c] = (average_loss[c] * j + l.item()) / (j + 1)
 
-            if j % (len(self.data.test) / 100) == 0:
-                p_str = str(j) + ' '
-                for av in average_loss:
-                    p_str += str(av) + ' '
-                p_str += str(self.correct) + ' '
-                print p_str
+            # if j % (len(self.data.test) / 100) == 0:
+            #     p_str = str(j) + ' '
+            #     for av in average_loss:
+            #         p_str += str(av) + ' '
+            #     p_str += str(self.correct) + ' '
+            #     print p_str
 
             #remove refs; so the gc remove unwanted tensors
             self.model.remove_refs(item)
 
-        for loss in average_loss:
-            f.write('loss - %f\n' % (loss))
-        f.write('%f,%f\n' % (self.correct, len(self.data.test)))
+        # for loss in average_loss:
+        #     f.write('loss - %f\n' % (loss))
+        # f.write('%f,%f\n' % (self.correct, len(self.data.test)))
 
-        print average_loss, self.correct, len(self.data.test)
+        print('Average loss: %f, Num correct: %d, Num data: %d' % (
+            average_loss[0], self.correct, len(self.data.test)))
         f.close()
 
         return (actual, predicted)
