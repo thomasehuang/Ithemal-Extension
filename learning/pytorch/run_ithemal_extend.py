@@ -136,7 +136,7 @@ def get_train_parameters(args):
 def load_data(params):
     # type: (BaseParameters) -> dt.DataCost
     # TODO (thomaseh): finish dataloader
-    data = DataExtend(params.data)
+    data = DataExtend(params.data, params.use_rnn)
     # assert False
 
     return data

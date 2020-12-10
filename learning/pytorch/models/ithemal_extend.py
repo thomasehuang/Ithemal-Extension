@@ -163,6 +163,8 @@ class GraphNN(AbstractGraphModule):
 
     def create_graphlstm(self, function):
         # type: (ut.BasicBlock) -> torch.tensor
+        function.print_function()
+        assert False
         leaves = function.find_leaves()
 
         leaf_hidden = []
@@ -191,8 +193,11 @@ class GraphNN(AbstractGraphModule):
         else:
             in_hidden_ins = self.init_hidden()
 
-        out_ins, hidden_ins = self.lstm_ins(
-            bblock.embed.unsqueeze(0).unsqueeze(0), in_hidden_ins)
+        if bblock.embed is None:
+            hidden_ins = in_hidden_ins
+        else:
+            out_ins, hidden_ins = self.lstm_ins(
+                bblock.embed.unsqueeze(0).unsqueeze(0), in_hidden_ins)
         bblock.hidden = hidden_ins
 
         return bblock.hidden
@@ -281,7 +286,8 @@ class Function:
             bblock.print_bb()
 
     def get_embedding(self):
-        return torch.stack([bb.embed for bb in self.bblocks])
+        return torch.stack(
+            [bb.embed for bb in self.bblocks if bb.embed is not None])
 
     def linearize_edges(self):
         for fst, snd in zip(self.bblocks, self.bblocks[1:]):

@@ -73,7 +73,7 @@ python learning/pytorch/predict.py --verbose --save-embed \
 To train our extended version of Ithemal, you can run the following:
 ```
 python learning/pytorch/run_ithemal_extend.py \
-    --data learning/pytorch/examples/test_dataset/ \
+    --data learning/pytorch/examples/test_dataset/ --use-rnn \
     train --experiment-name TEST_RUN --experiment-time TODAY \
     --sgd --trainers 1 --weird-lr --decay-lr --epochs 20
 ```
