@@ -11,11 +11,12 @@ from graph_models import AbstractGraphModule
 
 class RNNExtend(AbstractGraphModule):
 
-    def __init__(self, params):
+    def __init__(self, params, args):
         # type: (RnnParameters) -> None
         super(RNNExtend, self).__init__(params.embedding_size, params.hidden_size, params.num_classes)
 
         self.params = params
+        self.args = args
 
         # assuming LSTM for now
         self.bb_rnn = nn.LSTM(self.embedding_size, self.hidden_size)
@@ -38,8 +39,11 @@ class RNNExtend(AbstractGraphModule):
         embed = torch.stack(batch.x).unsqueeze(1)
         _, final_state_packed = self.bb_rnn(embed, self.get_bb_init())
         final_state = final_state_packed[0]
+        pred = self.linear(final_state.squeeze()).squeeze()
+        if self.args.use_scaling:
+            pred = pred * self.args.scale_amount
 
-        return self.linear(final_state.squeeze()).squeeze()
+        return pred
 
 
 @unique

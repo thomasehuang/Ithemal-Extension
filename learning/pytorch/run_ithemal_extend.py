@@ -28,6 +28,9 @@ def get_parser():
     parser.add_argument('--use-rnn', action='store_true', default=False)
     parser.add_argument('--no-residual', default=False, action='store_true', help='Don\'t use a residual model in Ithemal')
     parser.add_argument('--no-dag-rnn', default=False, action='store_true', help='Don\'t use the DAG-RNN model in Ithemal')
+
+    parser.add_argument('--use-scaling', action='store_true', help='Whether to scale model output', default=False)
+    parser.add_argument('--scale-amount', type=float, default=1000., help='Amount to scale by')
     #
 
     sp = parser.add_subparsers(dest='subparser')
@@ -41,7 +44,7 @@ def get_parser():
 
     train.add_argument('--batch-size', type=int, default=4, help='The batch size to use in train')
     train.add_argument('--epochs', type=int, default=3, help='Number of epochs to run for')
-    train.add_argument('--trainers', type=int, default=4, help='Number of trainer processes to use')
+    train.add_argument('--trainers', type=int, default=1, help='Number of trainer processes to use')
     train.add_argument('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
     train.add_argument('--decay-trainers', action='store_true', default=False, help='Decay the number of trainers at the end of each epoch')
     train.add_argument('--weight-decay', type=float, default=0, help='Coefficient of weight decay (L2 regularization) on model')
@@ -143,7 +146,7 @@ def load_data(params):
     return data
 
 
-def load_model(params):
+def load_model(params, args):
     # type: (BaseParameters) -> md.AbstractGraphModule
     if params.use_rnn:
         rnn_params = md.RnnParameters(
@@ -156,7 +159,7 @@ def load_model(params):
             rnn_type='LSTM',                # NOT USED
             learn_init=True,                # NOT USED
         )
-        model = RNNExtend(rnn_params)
+        model = RNNExtend(rnn_params, args)
     else:
         model = GraphNN(
             embedding_size=params.embed_size, hidden_size=params.hidden_size,
@@ -218,7 +221,7 @@ def main():
         # load data and model
         print('Loading data and setting up model...')
         data = load_data(base_params)
-        model = load_model(base_params)
+        model = load_model(base_params, args)
 
         if not args.test:
             # train
