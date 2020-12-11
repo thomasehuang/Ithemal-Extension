@@ -193,9 +193,11 @@ def train(data, model, base_params, train_params, save_dir):
         random.shuffle(data.train)
         trainer.train(report_loss_fn=report_loss_fn)
         loss_reporter.report()
-        if epoch_no % 10 == 0:
+        if epoch_no % 100 == 0:
             save_file = os.path.join(save_dir, 'epoch_%03d.mdl' % (epoch_no+1,))
             trainer.save_checkpoint(epoch_no, -1, save_file)
+    save_file = os.path.join(save_dir, 'epoch_final.mdl')
+    trainer.save_checkpoint(epoch_no, -1, save_file)
 
     return trainer
 
