@@ -36,18 +36,11 @@ class DataExtend(object):
         for d in data:
             # get path to function basic blocks
             func_path = os.path.join(data_path, d[0])
-            # get number of basic blocks
-            n_bb = len([b for b in os.listdir(func_path) if b.endswith('o')])
             # get list of embedding paths
-            bbs = []
-            for bb_id in range(n_bb):
-                embed = '%d.embed' % (bb_id,)
-                embed = embed if embed in os.listdir(func_path) \
-                            else '%d.none' % (bb_id,)
-                bbs.append(embed)
+            bbs = [bb for bb in os.listdir(func_path) if bb.endswith('.embed')]
+            bbs.sort(key=lambda x: int(x.strip('.embed')))
             # load basic block embeddings
-            x = [torch.load(os.path.join(func_path, bb)) \
-                    for bb in bbs if not bb.endswith('none')]
+            x = [torch.load(os.path.join(func_path, bb)) for bb in bbs]
             if len(x) == 0:
                 continue
             # create DataItem
@@ -59,22 +52,24 @@ class DataExtend(object):
                 # GraphNN
                 # create BasicBlock objects for each block
                 basicblocks = []
+                basicblocks_d = {}
                 for bb in bbs:
-                    embed = torch.load(os.path.join(func_path, bb)) \
-                        if not bb.endswith('none') else None
-                    bb_id = int(bb.strip('.')[0])
+                    embed = torch.load(os.path.join(func_path, bb))
+                    bb_id = int(bb.strip('.embed'))
                     basicblocks.append(BasicBlock(embed, d[0], bb_id))
+                    basicblocks_d[bb_id] = basicblocks[-1]
                 # read CFG file
-                cfg = json.load(open(os.path.join(func_path, 'CFG.json')))
+                cfg = json.load(
+                    open(os.path.join(func_path, 'CFG_collapsed.json')))
                 # set children, parents, and edge probs for each basic block
-                for i, basicblock in enumerate(basicblocks):
-                    if str(i) not in cfg:
-                        continue
-                    for dest in cfg[str(i)]:
-                        basicblock.children.append(basicblocks[dest[0]])
+                for basicblock in basicblocks_d.values():
+                    for dest in cfg[str(basicblock.bb_id)]:
+                        if len(dest) == 0 or dest[0] not in basicblocks_d:
+                            continue
+                        basicblock.children.append(basicblocks_d[dest[0]])
                         basicblock.children_probs.append(dest[1])
-                        basicblocks[dest[0]].parents.append(basicblock)
-                        basicblocks[dest[0]].parents_probs.append(dest[1])
+                        basicblocks_d[dest[0]].parents.append(basicblock)
+                        basicblocks_d[dest[0]].parents_probs.append(dest[1])
                 self.data.append(
                     DataItem(x, float(d[1]), Function(basicblocks, d[0]), None))
         # split data into train and val

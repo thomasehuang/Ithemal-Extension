@@ -6,6 +6,7 @@ from enum import Enum, unique
 import torch
 import torch.nn as nn
 
+import models.graph_models as md
 from graph_models import AbstractGraphModule
 
 
@@ -46,24 +47,9 @@ class RNNExtend(AbstractGraphModule):
         return pred
 
 
-@unique
-class ReductionType(Enum):
-    MAX = 0
-    ADD = 1
-    MEAN = 2
-    ATTENTION = 3
-
-
-@unique
-class NonlinearityType(Enum):
-    RELU = 0
-    SIGMOID = 1
-    TANH = 2
-
-
 class GraphNN(AbstractGraphModule):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, use_dag_rnn=True, reduction=ReductionType.MAX, nonlinear_width=128, nonlinear_type=NonlinearityType.RELU, nonlinear_before_max=False):
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, use_dag_rnn=True, reduction=md.ReductionType.MAX, nonlinear_width=128, nonlinear_type=md.NonlinearityType.RELU, nonlinear_before_max=False):
         # type: (int, int, int, bool, bool, bool, ReductionType, int, NonlinearityType, bool) -> None
         super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
 
@@ -108,11 +94,11 @@ class GraphNN(AbstractGraphModule):
 
         self.use_nonlinear = nonlinear_type is not None
 
-        if nonlinear_type == NonlinearityType.RELU:
+        if nonlinear_type == md.NonlinearityType.RELU:
             self.final_nonlinearity = torch.relu
-        elif nonlinear_type == NonlinearityType.SIGMOID:
+        elif nonlinear_type == md.NonlinearityType.SIGMOID:
             self.final_nonlinearity = torch.sigmoid
-        elif nonlinear_type == NonlinearityType.TANH:
+        elif nonlinear_type == md.NonlinearityType.TANH:
             self.final_nonlinearity = torch.tanh
 
         self.nonlinear_before_max = nonlinear_before_max
@@ -133,13 +119,13 @@ class GraphNN(AbstractGraphModule):
 
         stacked_items = torch.stack(items)
 
-        if self.reduction_typ == ReductionType.MAX:
+        if self.reduction_typ == md.ReductionType.MAX:
             return binary_reduction(torch.max)
-        elif self.reduction_typ == ReductionType.ADD:
+        elif self.reduction_typ == md.ReductionType.ADD:
             return binary_reduction(torch.add)
-        elif self.reduction_typ == ReductionType.MEAN:
+        elif self.reduction_typ == md.ReductionType.MEAN:
             return binary_reduction(torch.add) / len(items)
-        elif self.reduction_typ == ReductionType.ATTENTION:
+        elif self.reduction_typ == md.ReductionType.ATTENTION:
             preds = torch.stack([self.attention_2(torch.relu(self.attention_1(item))) for item in items])
             probs = F.softmax(preds, dim=0)
             print('{}, {}, {}'.format(
@@ -167,8 +153,6 @@ class GraphNN(AbstractGraphModule):
 
     def create_graphlstm(self, function):
         # type: (ut.BasicBlock) -> torch.tensor
-        function.print_function()
-        assert False
         leaves = function.find_leaves()
 
         leaf_hidden = []
