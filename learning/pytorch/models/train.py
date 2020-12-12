@@ -335,6 +335,8 @@ class Train():
 
             #print len(item.x)
             output = self.model(item)
+            # 583 post process output
+            output = self.data.inverse_label_transform(output)
             target = self.get_target(item)
 
             if self.predict_log:

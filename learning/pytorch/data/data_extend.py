@@ -3,6 +3,7 @@ import json
 import os
 import random
 import torch
+import numpy as np
 
 from models.ithemal_extend import BasicBlock, Function
 
@@ -79,4 +80,22 @@ class DataExtend(object):
         # split data into train and val
         idx = int(len(self.data) * 0.8)
         self.train = self.data[:idx]
+        # apply transformation to labels
+        self.get_train_stats()
+        for ex in self.train:
+            ex.y = self.transform_label(ex.y)
+
         self.test = self.data[idx:]
+
+    def get_train_stats(self):
+        train_ys = [ex.y for ex in self.train]
+        self.train_mean = np.mean(train_ys)
+        self.train_std = np.std(train_ys)
+
+    def transform_label(self, y):
+        # return (y - self.train_mean) / self.train_std
+        return np.log(y)
+
+    def inverse_label_transform(self, y):
+        # return y * self.train_std + self.train_mean
+        return torch.exp(y)
