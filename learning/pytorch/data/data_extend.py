@@ -72,6 +72,7 @@ class DataExtend(object):
                         basicblocks_d[dest[0]].parents_probs.append(dest[1])
                 self.data.append(
                     DataItem(x, float(d[1]), Function(basicblocks, d[0]), None))
+        self.data = self.filter_outliers()
         # split data into train and val
         idx = int(len(self.data) * 0.8)
         self.train = self.data[:idx]
@@ -81,6 +82,13 @@ class DataExtend(object):
             ex.y = self.transform_label(ex.y)
 
         self.test = self.data[idx:]
+
+    def filter_outliers(self):
+        return [d for d in self.data if d.y < 1e9]
+        ys = [d.y for d in self.data]
+        print(len(ys))
+        for i in range(1, 15):
+            print(i, len([y for y in ys if y < 10**i]))
 
     def get_train_stats(self):
         train_ys = [ex.y for ex in self.train]
