@@ -16,6 +16,7 @@ import sys
 import threading
 import torch
 import warnings
+import json
 
 START_MARKER = 'bb6f000000646790'.decode('hex')
 END_MARKER = 'bbde000000646790'.decode('hex')
@@ -79,8 +80,9 @@ def predict(model, data, fname, verbose, save_embed=False, wholeFile=False):
         print('='*40)
         print('\n'.join(i.intel for i in datum.block.instrs))
         print('='*40)
-    print(model(datum, save_embed).item())
+    cycles = model(datum, save_embed).item()
     model.remove_refs(datum)
+    return cycles
 
 def predict_raw(model_arg, data_arg, verbose, parallel):
     input_q = multiprocessing.Queue(1024)
@@ -140,6 +142,7 @@ def main():
     parser.add_argument('--parallel', help='How many parallel threads to run', type=int, default=1)
     parser.add_argument('--save-embed', help='Whether to save embed', action='store_true', default=False)
     parser.add_argument('--extend', help='Whether to use extended version of dataset', action='store_true', default=False)
+    parser.add_argument('--save-cycles', help='Whether to store the cycles as a json per bb for each function dir', action='store_true', default=False)
 
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument('--raw-stdin', help='Whether to read newline-separated raw hex from stdin', action='store_true', default=False)
@@ -161,13 +164,19 @@ def main():
         binaryExt = ('.o', '.out')
         for dirpath, subdirs, files in os.walk(datasetRoot):
             bins = [b for b in files if b.endswith(binaryExt)]
-            for b in bins:
-                bPath = os.path.join(dirpath, b)
-                print('Predicting', bPath)
-                predict(
-                    model, data, bPath, args.verbose,
-                    bPath if args.save_embed else None,
-                    wholeFile=False)
+            if len(bins) > 0:
+                dirpath_json = {}
+                for b in bins:
+                    bPath = os.path.join(dirpath, b)
+                    print('Predicting', bPath)
+                    cycles = predict(
+                        model, data, bPath, args.verbose,
+                        bPath if args.save_embed else None,
+                        wholeFile=False)
+                    dirpath_json[bPath.split('/')[-1].split('.')[0]] = cycles
+                if args.save_cycles:
+                    with open(dirpath + '/blocks_to_cycles.json', 'w') as outfile:
+                        json.dump(dirpath_json, outfile)
     else:
         if args.raw_stdin:
             predict_raw(args.model, args.model_data, args.verbose, args.parallel)
