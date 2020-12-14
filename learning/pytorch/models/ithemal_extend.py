@@ -5,6 +5,7 @@ from enum import Enum, unique
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import models.graph_models as md
 from graph_models import AbstractGraphModule
@@ -47,9 +48,18 @@ class RNNExtend(AbstractGraphModule):
         return pred
 
 
+@unique
+class ReductionType(Enum):
+    MAX = 0
+    ADD = 1
+    MEAN = 2
+    ATTENTION = 3
+    WEIGHTED = 4
+
+
 class GraphNN(AbstractGraphModule):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, use_dag_rnn=True, reduction=md.ReductionType.MAX, nonlinear_width=128, nonlinear_type=md.NonlinearityType.RELU, nonlinear_before_max=False):
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, use_dag_rnn=True, reduction=ReductionType.MAX, nonlinear_width=128, nonlinear_type=md.NonlinearityType.RELU, nonlinear_before_max=False):
         # type: (int, int, int, bool, bool, bool, ReductionType, int, NonlinearityType, bool) -> None
         super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
 
@@ -62,15 +72,6 @@ class GraphNN(AbstractGraphModule):
         self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
         self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
 
-        # linear weight for instruction embedding
-        self.opcode_lin = nn.Linear(self.embedding_size, self.hidden_size)
-        self.src_lin = nn.Linear(self.embedding_size, self.hidden_size)
-        self.dst_lin = nn.Linear(self.embedding_size, self.hidden_size)
-        # for sequential model
-        self.opcode_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
-        self.src_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
-        self.dst_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
-
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
 
@@ -78,7 +79,6 @@ class GraphNN(AbstractGraphModule):
         self.nonlinear_2 = nn.Linear(nonlinear_width, self.num_classes)
 
         #lstm - for sequential model
-        self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
         self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
         self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
 
@@ -103,37 +103,44 @@ class GraphNN(AbstractGraphModule):
 
         self.nonlinear_before_max = nonlinear_before_max
 
-    def reduction(self, items):
+    def reduction(self, items, weights=None):
         # type: (List[torch.tensor]) -> torch.tensor
         if len(items) == 0:
             return self.init_hidden()[0]
         elif len(items) == 1:
             return items[0]
 
-        def binary_reduction(reduction):
+        def binary_reduction(reduction, weights=None):
             # type: (Callable[[torch.tensor, torch.tensor], torch.tensor]) -> torch.tensor
-            final = items[0]
-            for item in items[1:]:
-                final = reduction(final, item)
+            if weights is None:
+                final = items[0]
+                for item in items[1:]:
+                    final = reduction(final, item)
+            else:
+                final = items[0] * weights[0]
+                for i, item in enumerate(items[1:]):
+                    final = torch.add(final, item * weights[i])
             return final
 
         stacked_items = torch.stack(items)
 
-        if self.reduction_typ == md.ReductionType.MAX:
+        if self.reduction_typ == ReductionType.MAX:
             return binary_reduction(torch.max)
-        elif self.reduction_typ == md.ReductionType.ADD:
+        elif self.reduction_typ == ReductionType.ADD:
             return binary_reduction(torch.add)
-        elif self.reduction_typ == md.ReductionType.MEAN:
+        elif self.reduction_typ == ReductionType.MEAN:
             return binary_reduction(torch.add) / len(items)
-        elif self.reduction_typ == md.ReductionType.ATTENTION:
+        elif self.reduction_typ == ReductionType.ATTENTION:
             preds = torch.stack([self.attention_2(torch.relu(self.attention_1(item))) for item in items])
             probs = F.softmax(preds, dim=0)
-            print('{}, {}, {}'.format(
-                probs.shape,
-                stacked_items.shape,
-                stacked_items * probs
-            ))
+            # print('{}, {}, {}'.format(
+            #     probs.shape,
+            #     stacked_items.shape,
+            #     stacked_items * probs
+            # ))
             return (stacked_items * probs).sum(dim=0)
+        elif self.reduction_typ == ReductionType.WEIGHTED:
+            return binary_reduction(torch.add, weights)
         else:
             raise ValueError()
 
@@ -174,10 +181,15 @@ class GraphNN(AbstractGraphModule):
             return bblock.hidden
 
         parent_hidden = [self.create_graphlstm_rec(parent) for parent in bblock.parents]
+        weights = bblock.parents_probs \
+                    if self.reduction_typ == ReductionType.WEIGHTED else None
 
         if len(parent_hidden) > 0:
             hs, cs = list(zip(*parent_hidden))
-            in_hidden_ins = (self.reduction(hs), self.reduction(cs))
+            in_hidden_ins = (
+                self.reduction(hs, weights=weights),
+                self.reduction(cs, weights=weights),
+            )
         else:
             in_hidden_ins = self.init_hidden()
 
@@ -238,7 +250,6 @@ class BasicBlock:
         #for lstms
         self.lstm = None
         self.hidden = None
-        self.tokens = None
 
     def print_bb(self):
         print('#####')
@@ -263,9 +274,10 @@ class BasicBlock:
 
 class Function:
 
-    def __init__(self, bblocks, name=''):
+    def __init__(self, bblocks, name='', block_freq=None):
         self.bblocks = bblocks
         self.name = name
+        self.block_freq = block_freq
 
     def num_bblocks(self):
         return len(self.bblocks)

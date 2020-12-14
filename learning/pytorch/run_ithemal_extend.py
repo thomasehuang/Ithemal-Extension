@@ -13,7 +13,7 @@ import training
 from data.data_extend import DataExtend
 from experiments.experiment import Experiment
 from ithemal_utils import *
-from models.ithemal_extend import RNNExtend, GraphNN
+from models.ithemal_extend import RNNExtend, GraphNN, ReductionType
 
 
 def get_parser():
@@ -31,6 +31,8 @@ def get_parser():
 
     parser.add_argument('--use-scaling', action='store_true', help='Whether to scale model output', default=False)
     parser.add_argument('--scale-amount', type=float, default=1000., help='Amount to scale by')
+
+    parser.add_argument('--use-freq', action='store_true', help='Whether to use block frequency', default=False)
     #
 
     sp = parser.add_subparsers(dest='subparser')
@@ -66,11 +68,12 @@ def get_parser():
     parser.add_argument('--dag-nonlinear-before-max', action='store_true', default=False)
 
     dag_reduction_group = parser.add_mutually_exclusive_group()
-    dag_reduction_group.add_argument('--dag-add-reduction', action='store_const', const=md.ReductionType.ADD, dest='dag_reduction')
-    dag_reduction_group.add_argument('--dag-max-reduction', action='store_const', const=md.ReductionType.MAX, dest='dag_reduction')
-    dag_reduction_group.add_argument('--dag-mean-reduction', action='store_const', const=md.ReductionType.MEAN, dest='dag_reduction')
-    dag_reduction_group.add_argument('--dag-attention-reduction', action='store_const', const=md.ReductionType.ATTENTION, dest='dag_reduction')
-    parser.set_defaults(dag_reduction=md.ReductionType.MAX)
+    dag_reduction_group.add_argument('--dag-add-reduction', action='store_const', const=ReductionType.ADD, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-max-reduction', action='store_const', const=ReductionType.MAX, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-mean-reduction', action='store_const', const=ReductionType.MEAN, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-weighted-reduction', action='store_const', const=ReductionType.WEIGHTED, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-attention-reduction', action='store_const', const=ReductionType.ATTENTION, dest='dag_reduction')
+    parser.set_defaults(dag_reduction=ReductionType.MAX)
     #
 
     # optimizer
@@ -137,10 +140,10 @@ def get_train_parameters(args):
     return train_params
 
 
-def load_data(params):
+def load_data(params, args):
     # type: (BaseParameters) -> dt.DataCost
     # TODO (thomaseh): finish dataloader
-    data = DataExtend(params.data, params.use_rnn)
+    data = DataExtend(params.data, params.use_rnn, args.use_freq)
     # assert False
 
     return data
@@ -197,9 +200,10 @@ def train(data, model, base_params, train_params, save_dir):
         trainer.train(report_loss_fn=report_loss_fn)
         loss_reporter.report()
         # 583 set how often to save models
-        if epoch_no % 50 == 0:
+        if epoch_no % 5 == 0:
             save_file = os.path.join(save_dir, 'epoch_%03d.mdl' % (epoch_no+1,))
             trainer.save_checkpoint(epoch_no, -1, save_file)
+            test(trainer, save_dir)
     save_file = os.path.join(save_dir, 'epoch_final.mdl')
     trainer.save_checkpoint(epoch_no, -1, save_file)
 
@@ -221,7 +225,7 @@ def main():
 
         # load data and model
         print('Loading data and setting up model...')
-        data = load_data(base_params)
+        data = load_data(base_params, args)
         model = load_model(base_params, args)
 
         if not args.test:

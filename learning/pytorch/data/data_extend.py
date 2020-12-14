@@ -18,10 +18,10 @@ class DataItem:
 
 class DataExtend(object):
 
-    def __init__(self, data_path, use_rnn=True):
-        self.load_data(data_path, use_rnn)
+    def __init__(self, data_path, use_rnn=True, use_freq=False):
+        self.load_data(data_path, use_rnn, use_freq)
 
-    def load_data(self, data_path, use_rnn):
+    def load_data(self, data_path, use_rnn, use_freq):
         self.data, self.train, self.test = [], [], []
         data = []
         with open(os.path.join(data_path, 'labels.csv')) as csvfile:
@@ -47,9 +47,12 @@ class DataExtend(object):
             if use_rnn:
                 # regular RNN
                 self.data.append(
-                    DataItem(x, float(d[1]), Function([], d[0]), None))
+                    DataItem(x, float(d[1]), Function([], d[0], None), None))
             else:
                 # GraphNN
+                # filter out the one example that breaks the code
+                if func_path == 'data/bbs/cbench-telecom-gsm/rpe/RPE_grid_positioning':
+                    continue
                 # create BasicBlock objects for each block
                 basicblocks = []
                 basicblocks_d = {}
@@ -61,6 +64,13 @@ class DataExtend(object):
                 # read CFG file
                 cfg = json.load(
                     open(os.path.join(func_path, 'CFG_collapsed.json')))
+                if use_freq:
+                    # read block frequency file
+                    block_freq = json.load(
+                        open(os.path.join(func_path,
+                                          'block_execution_counts.json')))
+                else:
+                    block_freq = None
                 # set children, parents, and edge probs for each basic block
                 for basicblock in basicblocks_d.values():
                     for dest in cfg[str(basicblock.bb_id)]:
@@ -71,7 +81,9 @@ class DataExtend(object):
                         basicblocks_d[dest[0]].parents.append(basicblock)
                         basicblocks_d[dest[0]].parents_probs.append(dest[1])
                 self.data.append(
-                    DataItem(x, float(d[1]), Function(basicblocks, d[0]), None))
+                    DataItem(
+                        x, float(d[1]),
+                        Function(basicblocks, d[0], block_freq), None))
         # split data into train and val
         idx = int(len(self.data) * 0.8)
         self.train = self.data[:idx]
