@@ -88,7 +88,7 @@ class DataExtend(object):
         idx = int(len(self.data) * 0.8)
         self.train = self.data[:idx]
         # apply transformation to labels
-        self.get_train_stats()
+        # self.get_train_stats()
         for ex in self.train:
             ex.y = self.transform_label(ex.y)
 
