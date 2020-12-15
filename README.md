@@ -3,6 +3,8 @@
 
 In this repository, we provide code for our extension to Ithemal. This project is done for the EECS 583 class at the University of Michigan.
 
+EECS 583 Group 29
+
 ## Installation Instructions
 
 Clone the repository:
