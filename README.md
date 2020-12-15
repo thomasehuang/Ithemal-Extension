@@ -38,6 +38,10 @@ make
 ```
 
 ## Dataset
+
+We implemented our own data collection pipeline to build the dataset for our project, which can be found here: https://github.com/zhaola/583DataCollection.
+
+The structure of the dataset is as follows:
 ```
 dataset
 ├── function1                   # contains binary files that represents basic blocks in a function
