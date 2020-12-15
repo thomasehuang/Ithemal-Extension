@@ -1,7 +1,7 @@
 
 # Ithemal Extension
 
-In this repository, we provide code for our extension to Ithemal. This project is done for the EECS 583 class at the University of Michigan.
+In this repository, we provide code for our extension to [Ithemal](https://github.com/ithemal/Ithemal). This project is done for the EECS 583 class at the University of Michigan.
 
 EECS 583 Group 29
 
@@ -96,6 +96,9 @@ python learning/pytorch/run_ithemal_extend.py \
     train --experiment-name TEST_RUN --experiment-time TODAY \
     --test --load-file /path/to/model/checkpoint
 ```
+
+
+Below is the README for the original Ithemal repository, which can be found here: https://github.com/ithemal/Ithemal.
 
 ---
 
