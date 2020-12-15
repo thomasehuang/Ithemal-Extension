@@ -1,6 +1,8 @@
 
 # Ithemal Extension
 
+In this repository, we provide code for our extension to Ithemal. This project is done for the EECS 583 class at the University of Michigan.
+
 ## Installation Instructions
 
 Clone the repository:
